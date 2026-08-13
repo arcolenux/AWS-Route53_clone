@@ -2,8 +2,6 @@
 
 A full-stack functional clone of the AWS Route53 management console, built as a Scaler SDE assignment.
 
-![Route53 Clone](docs/screenshot.png)
-
 ## Overview
 
 This application replicates the AWS Route53 user experience for managing DNS Hosted Zones and DNS Records. It features a pixel-faithful AWS Console UI with full CRUD operations, search, filtering, pagination, notifications, and session management.
@@ -14,7 +12,7 @@ This application replicates the AWS Route53 user experience for managing DNS Hos
 |-------|-----------|
 | **Frontend** | Next.js 15 (TypeScript), Tailwind CSS |
 | **Backend** | FastAPI (Python 3.10+) |
-| **Database** | SQLite |
+| **Database** | SQLite (WAL mode, Foreign Key Cascades) |
 | **Auth** | JWT (stateless, mocked IAM) |
 
 ## Features
@@ -23,7 +21,7 @@ This application replicates the AWS Route53 user experience for managing DNS Hos
 - Sign in / Sign up
 - Session persistence via JWT stored in `localStorage`
 - Demo account: `demo@route53.example` / `DemoPass123!`
-- Token validation on every page load
+- Token validation on every page load and API request
 
 ### Hosted Zones
 - View all hosted zones in an AWS-style sortable table
@@ -33,26 +31,38 @@ This application replicates the AWS Route53 user experience for managing DNS Hos
 - Delete zones (with cascade to DNS records)
 - Bulk delete with multi-select checkboxes
 - Pagination with configurable page size
+- Export hosted zones list as JSON
 
 ### DNS Records
 - View all records for a hosted zone
-- Support for: **A, AAAA, CNAME, TXT, MX, NS, PTR, SRV, CAA**
+- Support for all 9 record types: **A, AAAA, CNAME, TXT, MX, NS, PTR, SRV, CAA**
 - Search by name or value
 - Filter by record type
 - Create/Edit/Delete records
-- Bulk delete with multi-select
-- Per-type validation (server-side)
+- Bulk delete with multi-select checkboxes
+- Per-type validation (server-side and client-side)
 - Per-type UI hints and placeholders
 
 ### Route53 UX
 - AWS dark sidebar navigation
-- AWS-style top header with user avatar
+- AWS-style top header with user avatar and breadcrumbs
 - AWS color palette (orange, dark navy, blue links)
-- Modal dialogs with keyboard (Escape) support
+- Modal dialogs with keyboard (`Escape`) support
 - Toast notifications (success/error/info)
 - Loading spinners and empty states
-- Breadcrumb navigation
-- Mocked sections: Health Checks, Traffic Policies, Resolver, Domains, Profiles
+- Mocked sections: Dashboard, Health Checks, Traffic Policies, Resolver, Domains, IP Routing, Policy Records, Profiles
+
+### Bonus Features Implemented
+- **BIND Zone File Export**: Download standard BIND `.zone` files for any hosted zone
+- **BIND Zone File Import**: Parse and import standard BIND zone files directly
+- **JSON Export**: Export hosted zones and records in JSON format
+- **Keyboard Shortcuts**:
+  - `/` : Focus search bar
+  - `c` : Open Create modal
+  - `r` : Refresh table list
+  - `?` : Open Keyboard Shortcuts cheat sheet
+  - `Esc` : Close active modal
+- **Bulk Operations**: Multi-select bulk deletion for hosted zones and DNS records
 
 ---
 
@@ -68,24 +78,21 @@ This application replicates the AWS Route53 user experience for managing DNS Hos
 ```bash
 cd backend
 
-# Create a virtual environment (optional but recommended)
+# Create virtual environment (optional)
 python -m venv .venv
-.venv\Scripts\activate  # Windows
-source .venv/bin/activate  # Mac/Linux
+# Activate:
+# Windows: .\.venv\Scripts\activate
+# Linux/Mac: source .venv/bin/activate
 
 # Install dependencies
-pip install -r requirements.txt
-
-# Copy environment variables
-cp .env.example .env
-# Edit .env if needed
+pip install -r requirements.txt -r requirements-dev.txt
 
 # Start the server
-uvicorn app.main:app --reload --port 8000
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
 The API will be available at `http://localhost:8000`  
-Interactive API docs: `http://localhost:8000/docs`
+Interactive API documentation: `http://localhost:8000/docs`
 
 ### Frontend
 
@@ -95,15 +102,29 @@ cd frontend
 # Install dependencies
 npm install
 
-# Copy environment variables
-cp .env.example .env.local
-# Edit NEXT_PUBLIC_API_URL if backend runs on a different port
-
-# Start the dev server
+# Start development server
 npm run dev
+
+# Or build and run production server
+npm run build
+npm run start
 ```
 
-The app will be available at `http://localhost:3000`
+The application will be available at `http://localhost:3000`
+
+---
+
+## Docker & Container Deployment
+
+Run both backend and frontend with Docker Compose:
+
+```bash
+docker-compose up --build
+```
+
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:8000`
+- SQLite volume persisted under `sqlite_data` volume
 
 ---
 
@@ -132,7 +153,7 @@ The app will be available at `http://localhost:3000`
 │  │  /api/health                                     │   │
 │  └──────────────────────────────────────────────────┘   │
 └────────────────────────────┬────────────────────────────┘
-                             │ SQLite
+                             │ SQLite (WAL + Foreign Keys)
 ┌────────────────────────────▼────────────────────────────┐
 │                    SQLite Database                        │
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │
@@ -151,7 +172,7 @@ The app will be available at `http://localhost:3000`
 | `id` | TEXT PK | Random hex ID |
 | `email` | TEXT UNIQUE | User email |
 | `display_name` | TEXT | Display name |
-| `password_hash` | TEXT | SHA-256 hash |
+| `password_hash` | TEXT | SHA-256 salted hash |
 | `created_at` | TEXT | ISO timestamp |
 
 ### `hosted_zones`
@@ -169,8 +190,8 @@ The app will be available at `http://localhost:3000`
 |--------|------|-------------|
 | `id` | TEXT PK | Random hex ID |
 | `zone_id` | TEXT FK | References `hosted_zones(id)` ON DELETE CASCADE |
-| `name` | TEXT | Record name |
-| `type` | TEXT | A/AAAA/CNAME/TXT/MX/NS/PTR/SRV/CAA |
+| `name` | TEXT | Record name (@ or subdomain) |
+| `type` | TEXT | A, AAAA, CNAME, TXT, MX, NS, PTR, SRV, CAA |
 | `ttl` | INTEGER | Time-to-live in seconds |
 | `value` | TEXT | Newline-separated values |
 | `comment` | TEXT | Optional comment |
@@ -212,134 +233,58 @@ The app will be available at `http://localhost:3000`
 
 All authenticated endpoints require: `Authorization: Bearer <token>`
 
-Interactive API docs at: `http://localhost:8000/docs`
-
 ---
 
 ## Testing
 
-### Backend Tests
+### Backend Unit & Integration Tests (pytest)
 
 ```bash
 cd backend
-pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest tests/ -v
 ```
 
 22 tests covering:
 - Authentication flow (register, login, logout, /me)
-- Database initialization and FK cascade
-- Hosted zones CRUD, search, pagination, validation
+- Database initialization and Foreign Key cascade
+- Hosted zones CRUD, search, pagination, duplicate validation
 - DNS records CRUD for all 9 record types
-- Per-type value validation (A, MX, SRV, CAA, etc.)
+- Per-type value validation (A, AAAA, MX, SRV, CAA, TXT, etc.)
 - Authorization guards
 
-### Frontend E2E Tests (Playwright)
+### End-to-End API Integration Suite
 
 ```bash
 cd frontend
-npm install
-npx playwright install chromium
-npx playwright test
+npm run test:e2e
 ```
 
-Covers:
-- Login/logout flow
-- Hosted zones list, create, edit, delete
-- DNS records create, edit, delete, filter
+57 assertions covering:
+- Full API integration flow
+- Demo user authentication and session validation
+- Hosted zone creation, duplicate checks, update, and search
+- DNS record creation for all 9 types and type-specific validations
+- Cascade deletion verification
 
 ---
 
-## Deployment
+## Production Deployment Guide
 
-### Docker (Recommended)
+### Option 1: Vercel (Frontend) + Render/Railway (Backend)
+1. **Backend**:
+   - Deploy `backend/` as a Python web service on [Render](https://render.com) or [Railway](https://railway.app).
+   - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - Set environment variables:
+     - `ROUTE53_SECRET_KEY`: `<strong-secret>`
+     - `ROUTE53_DATABASE_PATH`: `route53.db` (or mount a persistent disk)
+2. **Frontend**:
+   - Deploy `frontend/` on [Vercel](https://vercel.com).
+   - Root Directory: `frontend`
+   - Environment Variable: `NEXT_PUBLIC_API_URL` set to the backend Render/Railway URL.
 
-```bash
-# Backend
-docker build -t route53-backend ./backend
-docker run -p 8000:8000 -e ROUTE53_SECRET_KEY=your-secret route53-backend
-
-# Frontend (build and serve)
-cd frontend
-npm run build
-npm start
-```
-
-### Environment Variables
-
-**Backend** (`backend/.env`):
-```
-ROUTE53_DATABASE_PATH=route53.db
-ROUTE53_SECRET_KEY=your-production-secret-key-here
-ROUTE53_TOKEN_EXPIRE_MINUTES=480
-ROUTE53_SEED_PASSWORD=DemoPass123!
-```
-
-**Frontend** (`frontend/.env.local`):
-```
-NEXT_PUBLIC_API_URL=http://localhost:8000
-```
-
-### Production Deployment
-
-- **Backend**: Deploy to Railway, Render, or any VPS. Use a bind-mounted volume for `route53.db`.
-- **Frontend**: Deploy to Vercel (`vercel deploy`) or any Node.js host.
-- Set `NEXT_PUBLIC_API_URL` to your backend's public URL.
-- Set a strong `ROUTE53_SECRET_KEY` in production.
-
----
-
-## Project Structure
-
-```
-.
-├── backend/
-│   ├── app/
-│   │   ├── main.py          # FastAPI app factory + lifespan
-│   │   ├── auth.py          # JWT helpers + auth dependency
-│   │   ├── db.py            # SQLite schema + connection factory
-│   │   ├── models.py        # Domain dataclasses
-│   │   ├── schemas.py       # Pydantic request/response models
-│   │   ├── core/
-│   │   │   └── config.py    # Settings from env vars
-│   │   └── routers/
-│   │       ├── auth.py      # Auth endpoints
-│   │       ├── hosted_zones.py  # Hosted zone endpoints
-│   │       └── dns_records.py   # DNS record endpoints
-│   ├── tests/               # pytest test suite
-│   ├── requirements.txt
-│   └── requirements-dev.txt
-│
-└── frontend/
-    └── src/
-        ├── app/
-        │   ├── layout.tsx          # Root layout
-        │   ├── page.tsx            # Redirects to /login
-        │   ├── login/              # Auth pages
-        │   ├── register/
-        │   └── (dashboard)/        # Auth-guarded layout
-        │       ├── layout.tsx      # Header + sidebar + toast
-        │       ├── dashboard/
-        │       ├── hosted-zones/
-        │       │   ├── page.tsx    # Zones list + CRUD
-        │       │   └── [zoneId]/records/page.tsx  # Records CRUD
-        │       ├── health-checks/  # Mocked sections
-        │       ├── traffic-policies/
-        │       ├── resolver/
-        │       ├── domains/
-        │       └── profiles/
-        ├── components/
-        │   ├── AwsHeader.tsx
-        │   ├── AwsSidebar.tsx
-        │   ├── Modal.tsx
-        │   ├── Toast.tsx
-        │   ├── Pagination.tsx
-        │   ├── LoadingSpinner.tsx
-        │   └── ComingSoon.tsx
-        └── lib/
-            ├── api.ts      # API client + types
-            └── auth.ts     # JWT session management
-```
+### Option 2: Docker Compose on VPS / EC2
+1. Clone the repository on your server.
+2. Run `docker-compose up -d --build`.
 
 ---
 
