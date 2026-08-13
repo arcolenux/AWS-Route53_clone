@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.auth import create_token
 from app.core.config import settings
 from app.db import get_connection, init_db
-from app.routers import auth
+from app.routers import auth, hosted_zones
 from app.schemas import UserOut
 
 
@@ -64,6 +64,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(auth.router)
+    app.include_router(hosted_zones.router)
 
     @app.get("/api/health")
     def health() -> dict:

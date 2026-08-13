@@ -32,3 +32,34 @@ class LoginIn(BaseModel):
 class AuthOut(BaseModel):
     user: UserOut
     token: str
+
+
+# --------------------------------------------------------------------------
+# Hosted Zones
+# --------------------------------------------------------------------------
+class HostedZoneIn(BaseModel):
+    name: str = Field(..., max_length=253)
+    private: bool = False
+    description: Optional[str] = Field(default=None, max_length=255)
+
+
+class HostedZoneUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=253)
+    description: Optional[str] = Field(default=None, max_length=255)
+
+
+class HostedZoneOut(BaseModel):
+    id: str
+    name: str
+    private: bool
+    description: Optional[str]
+    created_at: str
+    updated_at: str
+    record_count: int = 0
+
+
+class HostedZoneList(BaseModel):
+    items: List[HostedZoneOut]
+    total: int
+    page: int
+    page_size: int
