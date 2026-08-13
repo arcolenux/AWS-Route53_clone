@@ -6,8 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "test:e2e": "node e2e/api-integration.test.mjs"
+    "test:e2e": "node e2e/api-integration.test.mjs",
+    "test:playwright": "playwright test"
   },
   "dependencies": {
     "next": "15.1.6",
@@ -15,6 +15,7 @@
     "react-dom": "19.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
