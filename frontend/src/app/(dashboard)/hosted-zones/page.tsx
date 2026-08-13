@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { hostedZonesApi, HostedZone } from "@/lib/api";
+import { downloadFile } from "@/lib/dns-utils";
 import { useToast } from "@/components/Toast";
 import Modal from "@/components/Modal";
 import Pagination from "@/components/Pagination";
@@ -44,6 +45,9 @@ export default function HostedZonesPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteBulkOpen, setDeleteBulkOpen] = useState(false);
 
+  // Shortcuts modal
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
   const fetchZones = useCallback(async () => {
     setLoading(true);
     try {
@@ -60,6 +64,29 @@ export default function HostedZonesPage() {
 
   useEffect(() => {
     fetchZones();
+  }, [fetchZones]);
+
+  // Global Keyboard shortcuts listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+
+      if (e.key === "?") {
+        setShortcutsOpen((prev) => !prev);
+      } else if (e.key === "/") {
+        e.preventDefault();
+        document.getElementById("hosted-zones-search")?.focus();
+      } else if (e.key === "c" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        openCreate();
+      } else if (e.key === "r" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        fetchZones();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [fetchZones]);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -169,6 +196,25 @@ export default function HostedZonesPage() {
     fetchZones();
   };
 
+  // Export JSON
+  const handleExportZones = async () => {
+    try {
+      const allData = await hostedZonesApi.list({ page: 1, page_size: 100 });
+      const content = JSON.stringify(
+        {
+          exported_at: new Date().toISOString(),
+          zones: allData.items,
+        },
+        null,
+        2
+      );
+      downloadFile(content, "route53-hosted-zones.json", "application/json");
+      addToast("success", "Exported hosted zones list", "route53-hosted-zones.json");
+    } catch (err: any) {
+      addToast("error", "Export failed", err.message);
+    }
+  };
+
   // Selection
   const allSelected = zones.length > 0 && zones.every((z) => selected.has(z.id));
   const toggleAll = () => {
@@ -203,15 +249,21 @@ export default function HostedZonesPage() {
             A hosted zone is a container for records, and records contain information about how you want to route traffic.
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexShrink: 0, flexWrap: "wrap" }}>
+          <button className="btn-secondary" onClick={() => setShortcutsOpen(true)} title="Keyboard shortcuts (?)">
+            ⌨ Shortcuts
+          </button>
+          <button className="btn-secondary" onClick={handleExportZones} title="Export hosted zones as JSON">
+            ⬇ Export JSON
+          </button>
           <button
             className="btn-secondary"
             onClick={fetchZones}
-            title="Refresh"
+            title="Refresh (r)"
           >
             ↻ Refresh
           </button>
-          <button className="btn-primary" onClick={openCreate} id="create-hosted-zone-btn">
+          <button className="btn-primary" onClick={openCreate} id="create-hosted-zone-btn" title="Create hosted zone (c)">
             + Create hosted zone
           </button>
         </div>
@@ -235,7 +287,7 @@ export default function HostedZonesPage() {
               <input
                 type="text"
                 className="aws-input"
-                placeholder="Search hosted zones…"
+                placeholder="Search hosted zones… (press /)"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 style={{ paddingLeft: 32 }}
@@ -290,7 +342,7 @@ export default function HostedZonesPage() {
                 onClick={() => setDeleteBulkOpen(true)}
                 id="bulk-delete-btn"
               >
-                Delete
+                Delete ({selected.size})
               </button>
             </div>
           )}
@@ -591,6 +643,44 @@ export default function HostedZonesPage() {
             />
           </div>
         </form>
+      </Modal>
+
+      {/* Keyboard Shortcuts Modal */}
+      <Modal
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+        title="Keyboard Shortcuts"
+        size="sm"
+        footer={
+          <button className="btn-primary" onClick={() => setShortcutsOpen(false)}>
+            Close
+          </button>
+        }
+      >
+        <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+          <tbody>
+            <tr style={{ borderBottom: "1px solid #eaeded" }}>
+              <td style={{ padding: "8px 0" }}><kbd style={{ background: "#f2f3f3", padding: "2px 6px", borderRadius: 3, border: "1px solid #d5dbdb", fontFamily: "monospace" }}>/</kbd></td>
+              <td style={{ padding: "8px 0", color: "#545b64" }}>Focus search bar</td>
+            </tr>
+            <tr style={{ borderBottom: "1px solid #eaeded" }}>
+              <td style={{ padding: "8px 0" }}><kbd style={{ background: "#f2f3f3", padding: "2px 6px", borderRadius: 3, border: "1px solid #d5dbdb", fontFamily: "monospace" }}>c</kbd></td>
+              <td style={{ padding: "8px 0", color: "#545b64" }}>Open Create Hosted Zone modal</td>
+            </tr>
+            <tr style={{ borderBottom: "1px solid #eaeded" }}>
+              <td style={{ padding: "8px 0" }}><kbd style={{ background: "#f2f3f3", padding: "2px 6px", borderRadius: 3, border: "1px solid #d5dbdb", fontFamily: "monospace" }}>r</kbd></td>
+              <td style={{ padding: "8px 0", color: "#545b64" }}>Refresh hosted zones list</td>
+            </tr>
+            <tr style={{ borderBottom: "1px solid #eaeded" }}>
+              <td style={{ padding: "8px 0" }}><kbd style={{ background: "#f2f3f3", padding: "2px 6px", borderRadius: 3, border: "1px solid #d5dbdb", fontFamily: "monospace" }}>Esc</kbd></td>
+              <td style={{ padding: "8px 0", color: "#545b64" }}>Close active modal</td>
+            </tr>
+            <tr>
+              <td style={{ padding: "8px 0" }}><kbd style={{ background: "#f2f3f3", padding: "2px 6px", borderRadius: 3, border: "1px solid #d5dbdb", fontFamily: "monospace" }}>?</kbd></td>
+              <td style={{ padding: "8px 0", color: "#545b64" }}>Open this help dialog</td>
+            </tr>
+          </tbody>
+        </table>
       </Modal>
 
       {/* Delete Single Modal */}

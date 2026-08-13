@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { hostedZonesApi, recordsApi, DNSRecord, HostedZone, CreateRecordData } from "@/lib/api";
+import { exportToBind, exportToJson, downloadFile, parseImportData } from "@/lib/dns-utils";
 import { useToast } from "@/components/Toast";
 import Modal from "@/components/Modal";
 import Pagination from "@/components/Pagination";
@@ -92,6 +93,15 @@ export default function RecordsPage() {
   const [deleteBulkOpen, setDeleteBulkOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Import Modal
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importLoading, setImportLoading] = useState(false);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+
+  // Keyboard Shortcuts Modal
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
   // Load zone
   useEffect(() => {
     setZoneLoading(true);
@@ -123,6 +133,30 @@ export default function RecordsPage() {
 
   useEffect(() => {
     fetchRecords();
+  }, [fetchRecords]);
+
+  // Global Keyboard shortcuts listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if typing in an input/textarea
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+
+      if (e.key === "?") {
+        setShortcutsOpen((prev) => !prev);
+      } else if (e.key === "/") {
+        e.preventDefault();
+        document.getElementById("records-search")?.focus();
+      } else if (e.key === "c" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        openCreate();
+      } else if (e.key === "r" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        fetchRecords();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [fetchRecords]);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -243,6 +277,72 @@ export default function RecordsPage() {
     fetchRecords();
   };
 
+  // Export
+  const handleExportBind = async () => {
+    if (!zone) return;
+    try {
+      // Fetch all records without pagination
+      const allData = await recordsApi.list(zoneId, { page: 1, page_size: 100 });
+      const bindContent = exportToBind(zone, allData.items);
+      downloadFile(bindContent, `${zone.name}.zone`, "text/plain");
+      addToast("success", "Exported BIND zone file", `${zone.name}.zone`);
+    } catch (err: any) {
+      addToast("error", "Export failed", err.message);
+    }
+  };
+
+  const handleExportJson = async () => {
+    if (!zone) return;
+    try {
+      const allData = await recordsApi.list(zoneId, { page: 1, page_size: 100 });
+      const jsonContent = exportToJson(zone, allData.items);
+      downloadFile(jsonContent, `${zone.name}.json`, "application/json");
+      addToast("success", "Exported zone JSON file", `${zone.name}.json`);
+    } catch (err: any) {
+      addToast("error", "Export failed", err.message);
+    }
+  };
+
+  // Import
+  const handleImportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!zone || !importText.trim()) return;
+    setImportLoading(true);
+    setImportErrors([]);
+
+    const { records: parsedRecords, errors } = parseImportData(importText, zone.name);
+    if (errors.length > 0) {
+      setImportErrors(errors);
+      if (parsedRecords.length === 0) {
+        setImportLoading(false);
+        return;
+      }
+    }
+
+    let createdCount = 0;
+    const createErrors: string[] = [];
+
+    for (const rec of parsedRecords) {
+      try {
+        await recordsApi.create(zoneId, rec);
+        createdCount++;
+      } catch (err: any) {
+        createErrors.push(`${rec.name} (${rec.type}): ${err.message}`);
+      }
+    }
+
+    setImportLoading(false);
+    if (createErrors.length > 0) {
+      setImportErrors((prev) => [...prev, ...createErrors]);
+    }
+    if (createdCount > 0) {
+      addToast("success", `Successfully imported ${createdCount} DNS record(s)`);
+      setImportOpen(false);
+      setImportText("");
+      fetchRecords();
+    }
+  };
+
   // Selection
   const allSelected = records.length > 0 && records.every((r) => selected.has(r.id));
   const toggleAll = () => {
@@ -313,11 +413,25 @@ export default function RecordsPage() {
             DNS records for {zone?.name}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-          <button className="btn-secondary" onClick={fetchRecords}>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+          <button className="btn-secondary" onClick={() => setShortcutsOpen(true)} title="Keyboard shortcuts (?)">
+            ⌨ Shortcuts
+          </button>
+          <button className="btn-secondary" onClick={() => setImportOpen(true)} title="Import BIND or JSON">
+            ⬆ Import BIND
+          </button>
+          <div style={{ position: "relative", display: "inline-block" }}>
+            <button className="btn-secondary" onClick={handleExportBind} title="Export as BIND zone format">
+              ⬇ Export BIND
+            </button>
+          </div>
+          <button className="btn-secondary" onClick={handleExportJson} title="Export as JSON format">
+            ⬇ Export JSON
+          </button>
+          <button className="btn-secondary" onClick={fetchRecords} title="Refresh (r)">
             ↻ Refresh
           </button>
-          <button className="btn-primary" onClick={openCreate} id="create-record-btn">
+          <button className="btn-primary" onClick={openCreate} id="create-record-btn" title="Create record (c)">
             + Create record
           </button>
         </div>
@@ -341,7 +455,7 @@ export default function RecordsPage() {
               <input
                 type="text"
                 className="aws-input"
-                placeholder="Search records…"
+                placeholder="Search records… (press /)"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 style={{ paddingLeft: 32 }}
@@ -391,7 +505,7 @@ export default function RecordsPage() {
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <span style={{ fontSize: 13, color: "#545b64" }}>{selected.size} selected</span>
               <button className="btn-danger" onClick={() => setDeleteBulkOpen(true)} id="bulk-delete-records-btn">
-                Delete
+                Delete ({selected.size})
               </button>
             </div>
           )}
@@ -412,9 +526,14 @@ export default function RecordsPage() {
             }
             action={
               !search && !typeFilter ? (
-                <button className="btn-primary" onClick={openCreate}>
-                  + Create record
-                </button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn-primary" onClick={openCreate}>
+                    + Create record
+                  </button>
+                  <button className="btn-secondary" onClick={() => setImportOpen(true)}>
+                    ⬆ Import BIND file
+                  </button>
+                </div>
               ) : (
                 <button className="btn-secondary" onClick={() => { handleClearSearch(); setTypeFilter(""); }}>
                   Clear filters
@@ -624,6 +743,99 @@ export default function RecordsPage() {
             </p>
           </div>
         </form>
+      </Modal>
+
+      {/* Import Modal */}
+      <Modal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="Import DNS records from BIND zone or JSON"
+        size="lg"
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => setImportOpen(false)} disabled={importLoading}>
+              Cancel
+            </button>
+            <button
+              className="btn-primary"
+              form="import-form"
+              type="submit"
+              disabled={importLoading || !importText.trim()}
+            >
+              {importLoading ? "Importing…" : "Import Records"}
+            </button>
+          </>
+        }
+      >
+        <form id="import-form" onSubmit={handleImportSubmit}>
+          {importErrors.length > 0 && (
+            <div className="toast-error rounded px-4 py-3 mb-4 text-sm">
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>Import Warnings/Errors:</div>
+              <ul style={{ listStyleType: "disc", paddingLeft: 20 }}>
+                {importErrors.map((err, i) => (
+                  <li key={i}>{err}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="form-group">
+            <label className="aws-label" htmlFor="import-content">
+              BIND Zone / JSON Content
+            </label>
+            <textarea
+              id="import-content"
+              className="aws-input"
+              placeholder={`; Example BIND zone:\n$TTL 300\n@       IN  A       192.0.2.1\nwww     IN  CNAME   example.com.\nmail    IN  MX  10  mail.example.com.\n@       IN  TXT     "v=spf1 ~all"`}
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              rows={10}
+              required
+              style={{ fontFamily: "monospace", fontSize: 12, resize: "vertical" }}
+            />
+            <p className="form-hint">
+              Paste standard BIND zone file contents or exported JSON records.
+            </p>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Keyboard Shortcuts Cheat Sheet Modal */}
+      <Modal
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+        title="Keyboard Shortcuts"
+        size="sm"
+        footer={
+          <button className="btn-primary" onClick={() => setShortcutsOpen(false)}>
+            Close
+          </button>
+        }
+      >
+        <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+          <tbody>
+            <tr style={{ borderBottom: "1px solid #eaeded" }}>
+              <td style={{ padding: "8px 0" }}><kbd style={{ background: "#f2f3f3", padding: "2px 6px", borderRadius: 3, border: "1px solid #d5dbdb", fontFamily: "monospace" }}>/</kbd></td>
+              <td style={{ padding: "8px 0", color: "#545b64" }}>Focus search bar</td>
+            </tr>
+            <tr style={{ borderBottom: "1px solid #eaeded" }}>
+              <td style={{ padding: "8px 0" }}><kbd style={{ background: "#f2f3f3", padding: "2px 6px", borderRadius: 3, border: "1px solid #d5dbdb", fontFamily: "monospace" }}>c</kbd></td>
+              <td style={{ padding: "8px 0", color: "#545b64" }}>Open Create Record modal</td>
+            </tr>
+            <tr style={{ borderBottom: "1px solid #eaeded" }}>
+              <td style={{ padding: "8px 0" }}><kbd style={{ background: "#f2f3f3", padding: "2px 6px", borderRadius: 3, border: "1px solid #d5dbdb", fontFamily: "monospace" }}>r</kbd></td>
+              <td style={{ padding: "8px 0", color: "#545b64" }}>Refresh record list</td>
+            </tr>
+            <tr style={{ borderBottom: "1px solid #eaeded" }}>
+              <td style={{ padding: "8px 0" }}><kbd style={{ background: "#f2f3f3", padding: "2px 6px", borderRadius: 3, border: "1px solid #d5dbdb", fontFamily: "monospace" }}>Esc</kbd></td>
+              <td style={{ padding: "8px 0", color: "#545b64" }}>Close active modal</td>
+            </tr>
+            <tr>
+              <td style={{ padding: "8px 0" }}><kbd style={{ background: "#f2f3f3", padding: "2px 6px", borderRadius: 3, border: "1px solid #d5dbdb", fontFamily: "monospace" }}>?</kbd></td>
+              <td style={{ padding: "8px 0", color: "#545b64" }}>Open this help dialog</td>
+            </tr>
+          </tbody>
+        </table>
       </Modal>
 
       {/* Delete Single Modal */}
