@@ -1,35 +1,68 @@
-# Claude / assignment files
-CLAUDE.md
-claude.md
-[Cc][Ll][Aa][Uu][Dd][Ee].md
-Scaler_SDE_Fullstack_Assignment_-_AWS_Route53_Clone.md
-
 # Dependencies
 node_modules/
+.pnp
+.pnp.js
 .venv/
 venv/
+env/
 __pycache__/
+*.py[cod]
+*$py.class
 
-# Environment / secrets
+# Environment variables & secrets
 .env
 .env.*
 !.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Build artifacts
 .next/
-dist/
+out/
 build/
-*.pyc
+dist/
+*.egg-info/
+.eggs/
 
-# Test artifacts
-coverage/
-playwright-report/
-test-results/
-.pytest_cache/
-backend/data/
+# Database files
+*.sqlite3
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
+backend/data/
 
-# OS / IDE
-.DS_Store/
-.vscode/
+# Test & coverage artifacts
+coverage/
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS and IDE files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 .idea/
+.vscode/
+*.swp
+*.swo
+*~
