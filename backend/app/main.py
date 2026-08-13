@@ -24,12 +24,12 @@ def seed_demo_user() -> None:
 
     with get_connection() as conn:
         exists = conn.execute(
-            "SELECT id FROM users WHERE email = 'demo@route53.example'"
+            "SELECT id FROM users WHERE id = 'demo' OR email = 'demo@route53.example'"
         ).fetchone()
         if exists:
             return
         conn.execute(
-            "INSERT INTO users (id, email, display_name, password_hash, created_at) "
+            "INSERT OR IGNORE INTO users (id, email, display_name, password_hash, created_at) "
             "VALUES (?, ?, ?, ?, ?)",
             (
                 "demo",

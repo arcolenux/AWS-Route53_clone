@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - sqlite_data:/data
+    environment:
+      - ROUTE53_DATABASE_PATH=/data/route53.db
+      - ROUTE53_SECRET_KEY=${ROUTE53_SECRET_KEY:-dev-secret-change-me}
+      - ROUTE53_SEED_PASSWORD=${ROUTE53_SEED_PASSWORD:-DemoPass123!}
+      - ROUTE53_TOKEN_EXPIRE_MINUTES=480
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  sqlite_data:

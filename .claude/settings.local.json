@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//usr/bin/**)",
+      "Bash(python3 -m virtualenv --version)",
+      "Bash(pip3 install *)",
+      "Bash(git check-ignore *)",
+      "Bash(git add *)",
+      "Bash(git reset *)",
+      "Bash(git commit -q -m 'feat: initialize FastAPI backend *)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(python3 -m pytest tests/ -v)",
+      "Bash(.venv/bin/python -m pytest tests/ -v)"
+    ]
+  }
+}
