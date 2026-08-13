@@ -1,0 +1,35 @@
+# Claude / assignment files
+CLAUDE.md
+claude.md
+[Cc][Ll][Aa][Uu][Dd][Ee].md
+Scaler_SDE_Fullstack_Assignment_-_AWS_Route53_Clone.md
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+.next/
+dist/
+build/
+*.pyc
+
+# Test artifacts
+coverage/
+playwright-report/
+test-results/
+.pytest_cache/
+backend/data/
+*.db
+
+# OS / IDE
+.DS_Store/
+.vscode/
+.idea/
