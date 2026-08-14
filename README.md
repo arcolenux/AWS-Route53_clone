@@ -1,6 +1,16 @@
 # AWS Route53 Clone
 
-A full-stack functional clone of the AWS Route53 management console, built as a Scaler SDE assignment.
+A full-stack functional clone of the AWS Route53 management console.
+
+## 🚀 Live Demo
+
+**Frontend:** [AWS Route53 Clone](https://aws-route53-clone-17hu19skd.vercel.app)
+
+**Backend API:** https://aws-route53-backend-ztb0.onrender.com
+
+**API Documentation:** https://aws-route53-backend-ztb0.onrender.com/docs
+
+**Health Check:** https://aws-route53-backend-ztb0.onrender.com/api/health
 
 ## Overview
 
