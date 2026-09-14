@@ -4,7 +4,7 @@ A full-stack functional clone of the AWS Route53 management console.
 
 ## 🚀 Live Demo
 
-**Frontend:** [AWS Route53 Clone](https://aws-route53-clone-17hu19skd.vercel.app)
+**Frontend:** [AWS Route53 Clone](https://aws-route53-clone-ten.vercel.app/login)
 
 **Backend API:** https://aws-route53-backend-ztb0.onrender.com
 
