@@ -15,7 +15,8 @@ export class ApiError extends Error {
 
 export async function apiFetch<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retries = 1
 ): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -24,7 +25,21 @@ export async function apiFetch<T>(
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  } catch (err: unknown) {
+    if (retries > 0) {
+      // Wait 2.5s and retry once in case backend was in the middle of waking up
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      return apiFetch<T>(path, options, retries - 1);
+    }
+    throw new ApiError(
+      0,
+      "Unable to connect to the backend. The server may still be spinning up, please try again in a few seconds."
+    );
+  }
+
   if (res.status === 204) return undefined as T;
   const body = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
@@ -40,6 +55,7 @@ export async function apiFetch<T>(
   }
   return body as T;
 }
+
 
 /** Build a query string from an object, omitting undefined values */
 function toQS(params: Record<string, string | number | boolean | undefined>): string {

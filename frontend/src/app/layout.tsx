@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { BackendWarmup } from "@/components/BackendWarmup";
 
 export const metadata: Metadata = {
   title: "AWS Route 53",
@@ -16,7 +17,10 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
       </head>
-      <body style={{ margin: 0, padding: 0 }}>{children}</body>
+      <body style={{ margin: 0, padding: 0 }}>
+        {children}
+        <BackendWarmup />
+      </body>
     </html>
   );
 }
